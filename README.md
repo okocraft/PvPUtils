@@ -1,2 +1,2 @@
-# PvPUtils
-Add some atractive features on PvP
+# PvPFlags
+Add some flags for PvP.
