@@ -73,48 +73,55 @@ public class PvPListener implements Listener {
             inPvPPlayers.add(attacking);
         }
 
-        if (!calcStateFlag(attacked, plugin.getPvPItemDamageFlag())) {
-            return;
+        if (calcStateFlag(attacked, plugin.getPvPSpecialKnockbackFlag())) {
+            double power = Math.sqrt(event.getDamage()) / 4;
+            Vector knockback = attacked.getLocation().toVector()
+                    .subtract(event.getDamager().getLocation().toVector())
+                    .normalize().multiply(power * 2).add(new Vector(0, power, 0))
+                    .add(attacking.getVelocity());
+
+            new BukkitRunnable(){
+                
+                @Override
+                public void run() {
+                    attacked.setVelocity(knockback);
+                }
+            }.runTask(plugin);
+
+            new BukkitRunnable() {
+                long expire = System.currentTimeMillis() + 1000;
+
+                @Override
+                public void run() {
+                    if (attacked.getVelocity().getY() < 0 || attacked.isDead()
+                            || expire < System.currentTimeMillis()) {
+                        cancel();
+                        return;
+                    }
+
+                    attacked.getWorld().spawnParticle(Particle.EXPLOSION_LARGE, attacked.getLocation(), 1);
+                }
+            }.runTaskTimer(plugin, 1, 1);
         }
 
-        
-        event.setCancelled(true);
-        attacked.damage(event.getDamage());
-
-        Vector knockback = attacked.getLocation().toVector().subtract(event.getDamager().getLocation().toVector());
-        double power = Math.sqrt(event.getDamage() * 0.75);
-
-        knockback = knockback.normalize().multiply(power).add(new Vector(0, power / 3, 0));
-        attacked.setVelocity(knockback);
-
-        new BukkitRunnable(){
-        
-            @Override
-            public void run() {
-                if (attacked.isDead() && calcStateFlag(attacked, plugin.getPvPAutoRespawnFlag())) {
-                    attacked.spigot().respawn();
-                }
-            }
-        }.runTaskLater(plugin, 0);
-
         new BukkitRunnable() {
-            long startTime = System.currentTimeMillis();
 
             @Override
             public void run() {
-                attacked.getWorld().spawnParticle(Particle.EXPLOSION_LARGE, attacked.getLocation(), 1);
-
-                if (attacked.getVelocity().getY() < 0 || attacked.isDead()
-                        || startTime + 1000 < System.currentTimeMillis()) {
-                    cancel();
+                if (attacked.isDead()) {
+                    attacked.setVelocity(new Vector());
+                    if (calcStateFlag(attacked, plugin.getPvPAutoRespawnFlag())) {
+                        attacked.spigot().respawn();
+                    }
                 }
             }
-        }.runTaskTimer(plugin, 1, 1);
+        }.runTask(plugin);
     }
 
     private boolean calcStateFlag(Player player, StateFlag flag) {
         RegionManager rm = regionContainer.get(BukkitAdapter.adapt(player.getWorld()));
-        ApplicableRegionSet applicableRegionSet = rm.getApplicableRegions(BukkitAdapter.adapt(player.getLocation()).toVector().toBlockPoint());
+        ApplicableRegionSet applicableRegionSet = rm
+                .getApplicableRegions(BukkitAdapter.adapt(player.getLocation()).toVector().toBlockPoint());
         return applicableRegionSet.testState(WorldGuardPlugin.inst().wrapPlayer(player), flag);
     }
 }
